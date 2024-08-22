@@ -49,6 +49,7 @@
             }],
         }],
         ['OS=="linux"', {
+          [ 'target_arch=="x64"', {
             'libraries': [
                 # These files were placed by download-CanBridge.mjs
                 '<(module_root_dir)/externalCompileTimeDeps/libCANBridge.a',
@@ -62,6 +63,37 @@
                     '<(module_root_dir)/prebuilds/linux-x64/libwpiutil.so',
                 ]
             }],
+          }],
+          [ 'target_arch=="arm"', {
+            'libraries': [
+                # These files were placed by download-CanBridge.mjs
+                '<(module_root_dir)/externalCompileTimeDeps/libCANBridge.a',
+            ],
+            'copies': [{
+                'destination': './build/Release',
+                'files': [
+                    # These files were placed in the prebuilds folder by download-CanBridge.mjs
+                    '<(module_root_dir)/prebuilds/linux-arm32/libCANBridge.so',
+                    '<(module_root_dir)/prebuilds/linux-arm32/libwpiHal.so',
+                    '<(module_root_dir)/prebuilds/linux-arm32/libwpiutil.so',
+                ]
+            }],
+          }],
+          [ 'target_arch=="arm64"', {
+            'libraries': [
+                # These files were placed by download-CanBridge.mjs
+                '<(module_root_dir)/externalCompileTimeDeps/libCANBridge.a',
+            ],
+            'copies': [{
+                'destination': './build/Release',
+                'files': [
+                    # These files were placed in the prebuilds folder by download-CanBridge.mjs
+                    '<(module_root_dir)/prebuilds/linux-arm64/libCANBridge.so',
+                    '<(module_root_dir)/prebuilds/linux-arm64/libwpiHal.so',
+                    '<(module_root_dir)/prebuilds/linux-arm64/libwpiutil.so',
+                ]
+            }],
+          }],
         }],
       ],
       'msvs_settings': {

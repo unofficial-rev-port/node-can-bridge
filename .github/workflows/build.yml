@@ -9,7 +9,46 @@ on:
       - '*'
 
 jobs:
-  build:
+  build-docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - container: wpilib/aarch64-cross-ubuntu:bullseye-22.04
+            name: LinuxARM64
+            platform-type: linuxarm64
+            arch: arm64
+          - container: wpilib/raspbian-cross-ubuntu:bullseye-22.04
+            name: LinuxARM32
+            platform-type: linuxarm32
+            arch: arm32
+    runs-on: ubuntu-latest
+    name: "Build - ${{ matrix.name }}"
+    container: ${{ matrix.container }}
+
+    steps:
+      - uses: actions/checkout@v4
+  
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+  
+      - name: Install dependencies
+        run: npm install
+
+      - name: Pretest
+        run: npm run pretest
+
+      - name: Test
+        run: npm test
+
+  build-native:
     strategy:
       fail-fast: false
       matrix:
