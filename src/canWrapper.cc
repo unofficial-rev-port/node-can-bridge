@@ -37,7 +37,11 @@
 uint8_t disabledSparkHeartbeat[] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t disabledRevCommonHeartbeat[] = {0};
 
+#ifdef _WIN32
 rev::usb::CandleWinUSBDriver* driver = new rev::usb::CandleWinUSBDriver();
+#elif __linux__
+rev::usb::SocketCANDriver* driver = new rev::usb::SocketCANDriver();
+#endif
 
 std::set<std::string> devicesRegisteredToHal; // TODO(Noah): Protect with mutex
 bool halInitialized = false;
