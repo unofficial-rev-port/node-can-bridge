@@ -3,8 +3,13 @@
 #include <rev/CANMessage.h>
 #include <rev/CANStatus.h>
 #include <rev/CANBridgeUtils.h>
+#ifdef _WIN32
 #include <rev/Drivers/CandleWinUSB/CandleWinUSBDriver.h>
 #include <rev/Drivers/CandleWinUSB/CandleWinUSBDevice.h>
+#elif __linux__
+#include <rev/Drivers/SocketCAN/SocketCANDriver.h>
+#include <rev/Drivers/SocketCAN/SocketCANDevice.h>
+#endif
 #include <utils/ThreadUtils.h>
 #include <hal/HAL.h>
 #include <hal/CAN.h>
@@ -32,7 +37,11 @@
 uint8_t disabledSparkHeartbeat[] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t disabledRevCommonHeartbeat[] = {0};
 
+#ifdef _WIN32
 rev::usb::CandleWinUSBDriver* driver = new rev::usb::CandleWinUSBDriver();
+#elif __linux__
+rev::usb::SocketCANDriver* driver = new rev::usb::SocketCANDriver();
+#endif
 
 std::set<std::string> devicesRegisteredToHal; // TODO(Noah): Protect with mutex
 bool halInitialized = false;
