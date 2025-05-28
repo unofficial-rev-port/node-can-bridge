@@ -21,8 +21,6 @@
 #include "canWrapper.h"
 #include "DfuSeFile.h"
 
-#define DEVICE_NOT_FOUND_ERROR "Device not found. Make sure to run getDevices()"
-
 #define REV_COMMON_HEARTBEAT_ID 0x00502C0
 #define SPARK_HEARTBEAT_ID 0x2052C80
 #define HEARTBEAT_PERIOD_MS 20
@@ -49,6 +47,12 @@ bool heartbeatTimeoutExpired = true; // Should only be changed in heartbeatsWatc
 std::map<std::string, std::array<uint8_t, REV_COMMON_HEARTBEAT_LENGTH>> revCommonHeartbeatMap;
 std::map<std::string, std::array<uint8_t, SPARK_HEARTBEAT_LENGTH>> sparkHeartbeatMap;
 auto latestHeartbeatAck = std::chrono::time_point<std::chrono::steady_clock>();
+
+void throwDeviceNotFoundError(Napi::Env env) {
+    Napi::Error error = Napi::Error::New(env, "CAN bridge device not found. Make sure to run getDevices()");
+    error.Set("canBridgeDeviceNotFound", Napi::Boolean::New(env, true));
+    error.ThrowAsJavaScriptException();
+}
 
 // Only call when holding canDevicesMtx
 void removeExtraDevicesFromDeviceMap(std::vector<std::string> descriptors) {
@@ -226,7 +230,7 @@ Napi::Object receiveMessage(const Napi::CallbackInfo& info) {
         auto deviceIterator = canDeviceMap.find(descriptor);
         if (deviceIterator == canDeviceMap.end()) {
             if (devicesRegisteredToHal.find(descriptor) != devicesRegisteredToHal.end()) return receiveHalMessage(info);
-            Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+            throwDeviceNotFoundError(env);
             return Napi::Object::New(env);
         }
 
@@ -325,7 +329,7 @@ Napi::Number openStreamSession(const Napi::CallbackInfo& info) {
         std::scoped_lock lock{canDevicesMtx};
         auto deviceIterator = canDeviceMap.find(descriptor);
         if (deviceIterator == canDeviceMap.end()) {
-            Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+            throwDeviceNotFoundError(env);
             return Napi::Number::New(env, 0);
         }
 
@@ -366,7 +370,7 @@ Napi::Array readStreamSession(const Napi::CallbackInfo& info) {
         std::scoped_lock lock{canDevicesMtx};
         auto deviceIterator = canDeviceMap.find(descriptor);
         if (deviceIterator == canDeviceMap.end()) {
-            Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+            throwDeviceNotFoundError(env);
             return Napi::Array::New(env);
         }
 
@@ -415,7 +419,7 @@ Napi::Number closeStreamSession(const Napi::CallbackInfo& info) {
     std::scoped_lock lock{canDevicesMtx};
     auto deviceIterator = canDeviceMap.find(descriptor);
     if (deviceIterator == canDeviceMap.end()) {
-        Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+        throwDeviceNotFoundError(env);
         return Napi::Number::New(env, 0);
     }
 
@@ -438,7 +442,7 @@ Napi::Object getCANDetailStatus(const Napi::CallbackInfo& info) {
         std::scoped_lock lock{canDevicesMtx};
         auto deviceIterator = canDeviceMap.find(descriptor);
         if (deviceIterator == canDeviceMap.end()) {
-            Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+            throwDeviceNotFoundError(env);
             return Napi::Object::New(env);
         }
 
@@ -510,7 +514,7 @@ Napi::Number sendCANMessage(const Napi::CallbackInfo& info) {
     }
     int status = _sendCANMessage(descriptor, messageId, messageData, dataParam.Length(), repeatPeriodMs);
     if (status < 0) {
-        Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+        throwDeviceNotFoundError(env);
     }
     return Napi::Number::New(env, status);
 }
@@ -538,7 +542,7 @@ Napi::Number sendRtrMessage(const Napi::CallbackInfo& info) {
     }
     int status = _sendCANMessage(descriptor, messageId, messageData, dataParam.Length(), repeatPeriodMs);
     if (status < 0) {
-        Napi::Error::New(env, DEVICE_NOT_FOUND_ERROR).ThrowAsJavaScriptException();
+        throwDeviceNotFoundError(env);
     }
     return Napi::Number::New(env, status);
 }
@@ -671,19 +675,111 @@ void stopNotifier(const Napi::CallbackInfo& info) {
     HAL_CleanNotifier(m_notifier, &status);
 }
 
-void writeDfuToBin(const Napi::CallbackInfo& info) {
+Napi::Promise writeDfuToBin(const Napi::CallbackInfo& info) {
     std::string dfuFileName = info[0].As<Napi::String>().Utf8Value();
     std::string binFileName = info[1].As<Napi::String>().Utf8Value();
-    Napi::Function cb = info[2].As<Napi::Function>();
+    int elementIndex;
+
+    if(info[2].IsUndefined() || info[2].IsNull()) {
+        elementIndex = 0;
+    } else {
+        elementIndex = info[2].As<Napi::Number>().Int32Value();
+    }
 
     dfuse::DFUFile dfuFile(dfuFileName.c_str());
     int status = 0;
     if (dfuFile && dfuFile.Images().size() > 0 && dfuFile.Images()[0]) {
-        dfuFile.Images()[0].Write(binFileName, dfuse::writer::Bin);
+        dfuFile.Images()[0].Write(binFileName, elementIndex, dfuse::writer::Bin);
     } else {
         status = 1;
     }
-    cb.Call(info.Env().Global(), {info.Env().Null(), Napi::Number::New(info.Env(), status)});
+    Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(info.Env());
+
+    deferred.Resolve(Napi::Number::New(info.Env(), status));
+    return deferred.Promise();
+}
+
+Napi::Array getImageElements(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    std::string dfuFileName = info[0].As<Napi::String>().Utf8Value();
+    const int imageIndex = info[1].As<Napi::Number>().Int32Value();
+
+    Napi::Array elements = Napi::Array::New(env);
+
+    const dfuse::DFUFile dfuFile(dfuFileName.c_str());
+
+    if(imageIndex >= dfuFile.Images().size()) {
+        const std::string errorMessage = "Image index out of range";
+        Napi::Error::New(env, errorMessage).ThrowAsJavaScriptException();
+        return elements;
+    }
+
+    const dfuse::DFUImage image = dfuFile.Images()[imageIndex];
+
+    uint32_t elementsCount = 0;
+    for(auto element: image.Elements()) {
+        Napi::Object elementObject = Napi::Object::New(env);
+        elementObject.Set("startAddress", element.Address());
+        elementObject.Set("size", element.Size());
+
+        elements[elementsCount++] = elementObject;
+    }
+
+    return elements;
+}
+
+Napi::Object getLatestMessageOfEveryReceivedArbId(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    std::string descriptor = info[0].As<Napi::String>().Utf8Value();
+    uint32_t maxAgeMs = info[1].As<Napi::Number>().Uint32Value();
+
+    std::shared_ptr<rev::usb::CANDevice> device;
+
+    { // This block exists to define how long we hold canDevicesMtx
+        std::scoped_lock lock{canDevicesMtx};
+        auto deviceIterator = canDeviceMap.find(descriptor);
+        if (deviceIterator == canDeviceMap.end()) {
+            if (devicesRegisteredToHal.find(descriptor) != devicesRegisteredToHal.end()) return receiveHalMessage(info);
+            throwDeviceNotFoundError(env);
+            return Napi::Object::New(env);
+        }
+        device = deviceIterator->second;
+    }
+
+    std::map<uint32_t, std::shared_ptr<rev::usb::CANMessage>> messages;
+    bool success = device->CopyReceivedMessagesMap(messages);
+    if (!success) {
+        Napi::Error::New(env, "Failed to copy the map of received messages").ThrowAsJavaScriptException();
+        return Napi::Object::New(env);
+    }
+
+     // TODO(Harper): Use HAL clock
+    const auto nowMs = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
+
+    Napi::Object result = Napi::Object::New(env);
+    for (auto& m: messages) {
+        uint32_t arbId = m.first;
+        auto message = m.second;
+        uint32_t timestampMs = message->GetTimestampUs();
+
+        if (nowMs - timestampMs > maxAgeMs) {
+            continue;
+        }
+
+        size_t messageSize = message->GetSize();
+        const uint8_t* messageData = message->GetData();
+        Napi::Array napiMessage = Napi::Array::New(env, messageSize);
+        for (int i = 0; i < messageSize; i++) {
+            napiMessage[i] =  messageData[i];
+        }
+        Napi::Object messageInfo = Napi::Object::New(env);
+        messageInfo.Set("messageID", message->GetMessageId());
+        messageInfo.Set("timeStamp", timestampMs);
+        messageInfo.Set("data", napiMessage);
+        result.Set(arbId, messageInfo);
+    }
+
+    return result;
 }
 
 void cleanupHeartbeatsRunning() {

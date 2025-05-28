@@ -4,7 +4,7 @@ import axios from 'axios';
 import AdmZip from 'adm-zip';
 import { platform, arch } from 'os';
 
-const canBridgeTag = "v2.5.0";
+const canBridgeTag = "v2.6.0";
 const canBridgeReleaseAssetUrlPrefix = `https://github.com/REVrobotics/CANBridge/releases/download/${canBridgeTag}`;
 
 const externalCompileTimeDepsPath = 'externalCompileTimeDeps';

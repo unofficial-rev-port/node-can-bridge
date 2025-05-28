@@ -1,6 +1,11 @@
 import {promisify} from "util";
 import * as path from "path";
 
+export interface DfuImageElement {
+    startAddress: number;
+    size: number;
+}
+
 export interface CanMessage {
     data: number[];
     messageID: number;
@@ -59,7 +64,8 @@ export class CanBridge {
     initializeNotifier: () => void;
     waitForNotifierAlarm: (time:number) => Promise<number>;
     stopNotifier: () => void;
-    writeDfuToBin: (dfuFileName:string, binFileName:string) => Promise<number>;
+    writeDfuToBin: (dfuFileName:string, binFileName:string, elementIndex?: number) => Promise<number>;
+    getImageElements: (dfuFileName: string, imageIndex: number) => DfuImageElement[];
     openHALStreamSession: (messageId: number, messageMask:number, numMessages:number) => number;
     readHALStreamSession: (streamHandle:number, numMessages:number) => CanMessage[];
     closeHALStreamSession: (streamHandle:number) => void;
@@ -68,6 +74,10 @@ export class CanBridge {
     startRevCommonHeartbeat: (descriptor: string) => void;
     stopHeartbeats: (descriptor: string, sendDisabledHeartbeatsFirst: boolean) => void;
     ackHeartbeats: () => void;
+    /**
+     * @return Object that maps arbitration IDs to the last-received message with that ID
+     */
+    getLatestMessageOfEveryReceivedArbId: (descriptor: string, maxAgeMs: number) => Record<number, CanMessage>;
 
     constructor() {
         try {
@@ -87,7 +97,8 @@ export class CanBridge {
             this.initializeNotifier = addon.initializeNotifier;
             this.waitForNotifierAlarm = promisify(addon.waitForNotifierAlarm);
             this.stopNotifier = addon.stopNotifier;
-            this.writeDfuToBin = promisify(addon.writeDfuToBin);
+            this.writeDfuToBin = addon.writeDfuToBin;
+            this.getImageElements = addon.getImageElements;
             this.openHALStreamSession = addon.openHALStreamSession;
             this.readHALStreamSession = addon.readHALStreamSession;
             this.closeHALStreamSession = addon.closeHALStreamSession;
@@ -96,30 +107,9 @@ export class CanBridge {
             this.startRevCommonHeartbeat = addon.startRevCommonHeartbeat;
             this.ackHeartbeats = addon.ackHeartbeats;
             this.stopHeartbeats = addon.stopHeartbeats;
+            this.getLatestMessageOfEveryReceivedArbId = addon.getLatestMessageOfEveryReceivedArbId;
         } catch (e: any) {
             throw new CanBridgeInitializationError(e);
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
