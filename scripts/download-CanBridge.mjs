@@ -4,7 +4,8 @@ import axios from 'axios';
 import AdmZip from 'adm-zip';
 import { platform, arch } from 'os';
 
-const canBridgeTag = "v2.6.0";
+const canBridgeTag = "v2.7.0";
+const canBridgeSHA = "7481e94e4b233274a97398b4eb13406399b24db2";
 const canBridgeReleaseAssetUrlPrefix = `https://github.com/REVrobotics/CANBridge/releases/download/${canBridgeTag}`;
 
 const externalCompileTimeDepsPath = 'externalCompileTimeDeps';
@@ -20,11 +21,11 @@ const tempDir = 'temp';
 try {
     // TODO: Do not hardcode the filenames, instead get them from the GitHub API -> Look at Octokit: https://github.com/octokit/octokit.js
     await Promise.all([
-        'CANBridge-linuxarm32.zip',
-        'CANBridge-linuxarm64.zip',
-        'CANBridge-linuxx86-64.zip',
-        'CANBridge-osxuniversal.zip',
-        'CANBridge-windowsx86-64.zip',
+        `CANBridge-linuxarm32-${canBridgeSHA}.zip`,
+        `CANBridge-linuxarm64-${canBridgeSHA}.zip`,
+        `CANBridge-linuxx86-64-${canBridgeSHA}.zip`,
+        `CANBridge-osxuniversal-${canBridgeSHA}.zip`,
+        `CANBridge-windowsx86-64-${canBridgeSHA}.zip`,
         'headers.zip'
     ].map(filename => downloadCanBridgeArtifact(filename)));
     console.log("CANBridge download completed");
@@ -69,10 +70,10 @@ function moveCompileTimeDeps() {
     }
     if (platform() === 'win32') {
         const deps = ['CANBridge.lib', 'wpiHal.lib', 'wpiutil.lib'];
-        deps.forEach(dep => moveExternalCompileTimeDeps(path.join('win32-x64', dep)));
+        deps.forEach(dep => moveExternalCompileTimeDeps(path.join('win32-x64', 'static', dep)));
     } else if (platform() === 'darwin') {
         const deps = ['libCANBridge.a'];
-        deps.forEach(dep => moveExternalCompileTimeDeps(path.join('darwin-osxuniversal', dep)));
+        deps.forEach(dep => moveExternalCompileTimeDeps(path.join('darwin-osxuniversal', 'static', dep)));
     } else if (platform() === 'linux') {
         const deps = ['libCANBridge.a'];
         const archDepMap = {
@@ -80,7 +81,7 @@ function moveCompileTimeDeps() {
             arm64: 'linux-arm64',
             arm: 'linux-arm32'
         };
-        deps.forEach(dep => moveExternalCompileTimeDeps(path.join(archDepMap[arch()], dep)));
+        deps.forEach(dep => moveExternalCompileTimeDeps(path.join(archDepMap[arch()], 'static', dep)));
     }
     console.log("External compile time dependencies moved to correct directories");
 }
@@ -97,20 +98,20 @@ function moveRuntimeDeps() {
     }
     if (platform() === 'win32') {
         const deps = ['CANBridge.dll', 'wpiHal.dll', 'wpiutil.dll'];
-        deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('win32-x64', dep), runtimeArtifactsPath.win));
+        deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('win32-x64', 'shared', dep), runtimeArtifactsPath.win));
     } else if (platform() === 'darwin') {
         const deps = ['libCANBridge.dylib', 'libwpiHal.dylib', 'libwpiutil.dylib'];
-        deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('darwin-osxuniversal', dep), runtimeArtifactsPath.osx));
+        deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('darwin-osxuniversal', 'shared', dep), runtimeArtifactsPath.osx));
     } else if (platform() === 'linux') {
         const deps = ['libCANBridge.so', 'libwpiHal.so', 'libwpiutil.so'];
         if (arch() === 'x64') {
-            deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('linux-x64', dep), runtimeArtifactsPath.linux));
+            deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('linux-x64', 'shared', dep), runtimeArtifactsPath.linux));
         }
         if (arch() === 'arm64') {
-            deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('linux-arm64', dep), runtimeArtifactsPath.linuxArm));
+            deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('linux-arm64', 'shared', dep), runtimeArtifactsPath.linuxArm));
         }
         if (arch() === 'arm') {
-            deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('linux-arm32', dep), runtimeArtifactsPath.linuxArm32));
+            deps.forEach(dep => moveRuntimeArtifactsDeps(path.join('linux-arm32', 'shared', dep), runtimeArtifactsPath.linuxArm32));
         }
     }
     console.log("CANBridge artifacts moved to correct directories");
